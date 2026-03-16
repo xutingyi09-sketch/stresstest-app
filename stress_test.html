@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生活科技 - 心理壓力測試</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #4A90E2;
+            --bg-color: #F5F7FA;
+            --card-bg: #FFFFFF;
+            --text-color: #333333;
+            --warning-color: #E74C3C;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, '微軟正黑體', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 { text-align: center; color: var(--primary-color); }
+        .page { display: none; }
+        .page.active { display: block; }
+        
+        /* 首頁樣式 */
+        .intro-text { font-size: 1.1em; margin-bottom: 30px; text-align: center; }
+        .btn {
+            display: block;
+            width: 200px;
+            margin: 20px auto;
+            padding: 12px 24px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: background 0.3s;
+            text-align: center;
+        }
+        .btn:hover { background-color: #357ABD; }
+
+        /* 題目樣式 */
+        .question-block {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid var(--primary-color);
+            border-radius: 4px;
+        }
+        .question-text { font-size: 1.1em; font-weight: bold; margin-bottom: 10px; }
+        .options {
+            display: flex;
+            justify-content: space-between;
+            max-width: 500px;
+            margin-top: 10px;
+        }
+        .options label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        
+        /* 結果頁樣式 */
+        .result-box {
+            text-align: center;
+            padding: 20px;
+            background: #eef2f5;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .score-display { font-size: 2.5em; font-weight: bold; color: var(--primary-color); }
+        .stress-level { font-size: 1.5em; font-weight: bold; margin-bottom: 10px; }
+        .warning-box {
+            background-color: #FDEDEC;
+            color: var(--warning-color);
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 5px solid var(--warning-color);
+            margin-bottom: 20px;
+            display: none;
+            font-weight: bold;
+        }
+        .chart-container {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 30px auto;
+        }
+        .dimension-desc { margin-top: 20px; }
+        .dimension-desc h4 { color: var(--primary-color); margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="page-home" class="page active">
+        <h1>生活科技 - 心理壓力測試</h1>
+        <div class="intro-text">
+            <p>歡迎來到心理壓力測試！</p>
+            <p>本測驗共有 15 題，請根據你**「最近兩週」**的真實感受進行作答。</p>
+            <p>選項從 1 到 5 分：<br>
+               <strong>1分 (非常不符合) —— 5分 (非常符合)</strong></p>
+            <p>請憑第一直覺作答，這將幫助我們為你分析目前的壓力狀態與來源。</p>
+        </div>
+        <button class="btn" onclick="startQuiz()">開始測驗</button>
+    </div>
+
+    <div id="page-quiz" class="page">
+        <h2>壓力狀態評估</h2>
+        <form id="quiz-form">
+            <div id="questions-container"></div>
+            <button type="button" class="btn" onclick="submitQuiz()">看分析結果</button>
+        </form>
+    </div>
+
+    <div id="page-result" class="page">
+        <h2>測驗分析報告</h2>
+        
+        <div id="warning-msg" class="warning-box">
+            ⚠ 注意：你的回答模式可能存在刻意控制或不一致，本結果可能不完全反映真實的壓力狀態。
+        </div>
+
+        <div class="result-box">
+            <div>你的總得分</div>
+            <div class="score-display" id="total-score">0</div>
+            <div class="stress-level" id="stress-level-text">壓力程度</div>
+            <div id="stress-desc">解釋說明...</div>
+        </div>
+
+        <h3>各構面壓力來源分析</h3>
+        <div class="chart-container">
+            <canvas id="radarChart"></canvas>
+        </div>
+
+        <div class="dimension-desc" id="dimension-details">
+            </div>
+
+        <button class="btn" onclick="location.reload()">重新測驗</button>
+    </div>
+</div>
+
+<script>
+    // 題目資料設定
+    const questions = [
+        { id: 1, text: "最近睡前，你會想著隔天要做的事情而無法立即放鬆。", type: "positive", dim: "時間與任務負荷" },
+        { id: 2, text: "當事情很多時，你會不知道先做哪件事比較好。", type: "positive", dim: "時間與任務負荷" },
+        { id: 3, text: "你發現自己偶爾會拖延原本打算立即完成的事情。", type: "positive", dim: "注意力負荷" },
+        { id: 4, text: "即使事情很多，你仍能有條理地安排自己的時間。", type: "reverse", dim: "調節能力" },
+        { id: 5, text: "你最近因小事而容易感到煩躁。", type: "positive", dim: "情緒反應" },
+        { id: 6, text: "你有時會在做事時突然分心，無法集中注意力。", type: "positive", dim: "注意力負荷" },
+        { id: 7, text: "最近你覺得精神比平常差。", type: "positive", dim: "身心狀態" },
+        { id: 8, text: "你能在忙碌中保持心情穩定。", type: "reverse", dim: "調節能力" },
+        { id: 9, text: "當事情堆積時，你會覺得腦中混亂。", type: "positive", dim: "情緒反應" },
+        { id: 10, text: "你最近會檢查或整理事情多於一次，擔心忘記。", type: "interference", dim: "注意力負荷" },
+        { id: 11, text: "你的睡眠品質最近有波動（入睡慢、淺眠等）。", type: "positive", dim: "身心狀態" },
+        { id: 12, text: "你能在面對多件事情時保持冷靜和理性。", type: "reverse", dim: "調節能力" },
+        { id: 13, text: "你會覺得時間過得很快，但事情還沒做完。", type: "positive", dim: "時間與任務負荷" },
+        { id: 14, text: "你能把事情慢慢完成，而不慌亂。", type: "reverse", dim: "調節能力" },
+        { id: 15, text: "當事情很多時，你偶爾會選擇暫時不處理任何事。", type: "positive", dim: "情緒反應" }
+    ];
+
+    // 初始化題目
+    function initQuestions() {
+        const container = document.getElementById('questions-container');
+        questions.forEach((q, index) => {
+            const block = document.createElement('div');
+            block.className = 'question-block';
+            block.innerHTML = `
+                <div class="question-text">${index + 1}. ${q.text}</div>
+                <div class="options">
+                    <label><input type="radio" name="q${q.id}" value="1"> 1 (非常不符合)</label>
+                    <label><input type="radio" name="q${q.id}" value="2"> 2</label>
+                    <label><input type="radio" name="q${q.id}" value="3"> 3</label>
+                    <label><input type="radio" name="q${q.id}" value="4"> 4</label>
+                    <label><input type="radio" name="q${q.id}" value="5"> 5 (非常符合)</label>
+                </div>
+            `;
+            container.appendChild(block);
+        });
+    }
+
+    // 切換頁面
+    function showPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+    }
+
+    function startQuiz() {
+        initQuestions();
+        showPage('page-quiz');
+        window.scrollTo(0, 0);
+    }
+
+    // 提交測驗與計算邏輯
+    function submitQuiz() {
+        const form = document.getElementById('quiz-form');
+        let totalScore = 0;
+        let isComplete = true;
+        let positiveSum = 0;
+        let positiveCount = 0;
+        let q10Score = 0;
+
+        // 構面分數統計
+        let dims = {
+            "時間與任務負荷": { sum: 0, count: 0 },
+            "注意力負荷": { sum: 0, count: 0 },
+            "情緒反應": { sum: 0, count: 0 },
+            "身心狀態": { sum: 0, count: 0 },
+            "調節能力": { sum: 0, count: 0 }
+        };
+
+        // 收集答案並計分
+        questions.forEach(q => {
+            const selected = form.querySelector(`input[name="q${q.id}"]:checked`);
+            if (!selected) {
+                isComplete = false;
+                return;
+            }
+            
+            let rawScore = parseInt(selected.value);
+            let finalScore = rawScore;
+
+            // 反向題計算 (6 - 分數)
+            if (q.type === 'reverse') {
+                finalScore = 6 - rawScore;
+            }
+
+            // 用於微干擾檢查：收集正向題總和與第10題分數
+            if (q.type === 'positive') {
+                positiveSum += rawScore;
+                positiveCount++;
+            }
+            if (q.id === 10) {
+                q10Score = rawScore;
+            }
+
+            totalScore += finalScore;
+            
+            // 累加構面分數
+            dims[q.dim].sum += finalScore;
+            dims[q.dim].count++;
+        });
+
+        if (!isComplete) {
+            alert("請回答所有問題後再提交！");
+            return;
+        }
+
+        // --- 刻意操控檢測 ---
+        // 邏輯：如果正向題平均分很高(>=4)，但干擾題(Q10)卻極低(1)，代表可能刻意隱瞞焦慮特徵
+        const positiveAvg = positiveSum / positiveCount;
+        if (q10Score === 1 && positiveAvg >= 4) {
+            document.getElementById('warning-msg').style.display = 'block';
+        } else {
+            document.getElementById('warning-msg').style.display = 'none';
+        }
+
+        // --- 總分與壓力程度判定 ---
+        let stressLevel = "";
+        let stressDesc = "";
+        if (totalScore >= 15 && totalScore <= 29) {
+            stressLevel = "低壓力";
+            stressDesc = "生活負荷與心理狀態穩定，注意力與情緒狀態正常。";
+        } else if (totalScore <= 44) {
+            stressLevel = "中等壓力";
+            stressDesc = "有一定壓力，但仍能維持運作，可能偶爾出現拖延或煩躁。";
+        } else if (totalScore <= 59) {
+            stressLevel = "偏高壓力";
+            stressDesc = "壓力可能開始影響專注、情緒與睡眠，需要調整作息或壓力管理。";
+        } else {
+            stressLevel = "高壓力";
+            stressDesc = "壓力明顯影響生活與身心狀態，建議尋求支援或調整生活方式。";
+        }
+
+        document.getElementById('total-score').innerText = totalScore;
+        document.getElementById('stress-level-text').innerText = stressLevel;
+        document.getElementById('stress-desc').innerText = stressDesc;
+
+        // --- 計算構面平均分 ---
+        const dimLabels = Object.keys(dims);
+        const dimScores = dimLabels.map(key => (dims[key].sum / dims[key].count).toFixed(1));
+
+        // 渲染雷達圖
+        renderChart(dimLabels, dimScores);
+
+        // 渲染構面文字解釋
+        renderDimensionDetails(dimLabels, dimScores);
+
+        showPage('page-result');
+        window.scrollTo(0, 0);
+    }
+
+    // 繪製雷達圖
+    let radarChart;
+    function renderChart(labels, data) {
+        const ctx = document.getElementById('radarChart').getContext('2d');
+        if (radarChart) radarChart.destroy(); // 避免重新測驗時圖表重疊
+
+        radarChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '你的壓力指數 (1-5分)',
+                    data: data,
+                    backgroundColor: 'rgba(74, 144, 226, 0.2)',
+                    borderColor: 'rgba(74, 144, 226, 1)',
+                    pointBackgroundColor: 'rgba(74, 144, 226, 1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                scales: {
+                    r: {
+                        angleLines: { display: true },
+                        suggestedMin: 1,
+                        suggestedMax: 5,
+                        ticks: { stepSize: 1 }
+                    }
+                }
+            }
+        });
+    }
+
+    // 產生構面文字解釋
+    function renderDimensionDetails(labels, scores) {
+        const container = document.getElementById('dimension-details');
+        container.innerHTML = '';
+        
+        const explanations = {
+            "時間與任務負荷": "若此項偏高，代表壓力主要來自事情多、時間不足、安排困難。",
+            "注意力負荷": "若此項偏高，壓力表現在集中力不足、容易分心、拖延。",
+            "情緒反應": "若此項偏高，壓力表現在容易煩躁、情緒波動大或有逃避心理。",
+            "身心狀態": "若此項偏高，代表壓力已實質影響到你的精神狀態與睡眠品質。",
+            "調節能力": "此為反向計分(分數越高代表調節能力越弱)。若此項偏高，代表自我調節能力較低，壓力更容易累積。"
+        };
+
+        labels.forEach((label, index) => {
+            const score = scores[index];
+            let status = score >= 4 ? "🔴 偏高" : (score >= 3 ? "🟡 中等" : "🟢 穩定");
+            
+            container.innerHTML += `
+                <div>
+                    <h4>${label}：${score} 分 (${status})</h4>
+                    <p style="font-size: 0.9em; color: #666;">${explanations[label]}</p>
+                </div>
+                <hr style="border:0; border-top: 1px solid #eee;">
+            `;
+        });
+    }
+</script>
+
+</body>
+</html>
